@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>TECH未来仕様 四節リンク機構シミュレータ</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f4f6f8;color:#20252b}
+.wrap{max-width:1280px;margin:auto;padding:20px}
+h1{margin:0 0 14px;font-size:26px}.layout{display:grid;grid-template-columns:330px 1fr;gap:18px}
+.panel,.stage{background:#fff;border-radius:14px;box-shadow:0 2px 10px #0001}.panel{padding:18px}.stage{padding:12px}
+h2{font-size:17px;margin:4px 0 10px}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.controls button{flex:1;min-width:95px}
+button{border:1px solid #cbd2d9;background:#fff;border-radius:8px;padding:9px 10px;cursor:pointer;font-size:14px}button:hover{background:#f1f4f7}button.active{background:#20252b;color:#fff;border-color:#20252b}
+.hint,.note,.selection{background:#f5f7f9;border-radius:8px;padding:10px;font-size:12px;line-height:1.65;color:#56606b;margin-top:12px}
+.selection{background:#fff7e8;border:1px solid #f0c36d;color:#6b4b00}.selection b{color:#8a5b00}
+.canvasViewport{width:100%;height:650px;overflow:hidden;border:1px solid #dfe4e8;border-radius:10px;background:#fff}
+canvas{width:100%;height:100%;display:block;background:#fff;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.status{display:flex;justify-content:space-between;gap:10px;padding:8px 3px 0;font-size:13px;color:#56606b}.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin:6px 3px}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px}.warning{color:#b42318;font-size:12px;min-height:18px;margin-top:5px}
+.modebox{padding:10px;border:1px solid #dfe4e8;border-radius:8px;margin-bottom:14px}.modebox strong{display:block;margin-bottom:5px}.small{font-size:12px;color:#68727d;line-height:1.5}
+@media(max-width:850px){.layout{grid-template-columns:1fr}.canvasViewport{height:520px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>TECH未来仕様 四節リンク機構シミュレータ</h1>
+<div class="layout">
+<section class="panel">
+  <div class="modebox">
+    <strong>TECH未来のロッド</strong>
+    <div class="small" id="rodModeText">左右（横）：11穴　／　上下（縦）：5穴<br>穴の位置を変えて、四節リンクの長さを組み替えます。</div>
+    <div class="controls" style="margin-top:9px">
+      <button id="modeHorizontal11" class="active">左右11・上下5</button>
+      <button id="modeHorizontal5">左右5・上下11</button>
+    </div>
+  </div>
+
+  <h2>接続穴の変更</h2>
+  <div class="selection" id="selectionText"><b>操作：</b>変更したい接続部を右クリックしてください。</div>
+  <div class="controls">
+    <button id="cancelSelect">選択を解除</button>
+    <button id="resetHoles">初期配置に戻す</button>
+  </div>
+
+  <h2>操作</h2>
+  <div class="controls">
+    <button id="play">▶ 再生</button>
+    <button id="stop">■ 停止</button>
+    <button id="clear">軌道クリア</button>
+  </div>
+  <div class="controls">
+    <button id="trailToggle" class="active">軌道：ON</button>
+    <button id="zoomOut">− 縮小</button>
+    <button id="zoomReset">100%</button>
+    <button id="zoomIn">＋ 拡大</button>
+  </div>
+  <div style="margin-top:12px">
+    <label for="speedRange" style="font-size:13px">再生速度</label>
+    <div style="display:grid;grid-template-columns:1fr 72px;gap:9px;align-items:center;margin-top:7px">
+      <input id="speedRange" type="range" min="0.25" max="2.5" step="0.05" value="1">
+      <input id="speedNumber" type="number" min="0.25" max="2.5" step="0.05" value="1">
+    </div>
+    <div class="small" style="margin-top:4px">× <span id="speedValue">1.00</span></div>
+  </div>
+
+  <div class="hint">
+    <b>接続穴の変更：</b>変更したい接続部を<b>右クリック</b> → その接続部で変更したいロッドの穴を<b>左クリック</b>してください。<br>
+    <b>手動操作：</b>オレンジ色の原動節の接続部をドラッグします。<br>
+    <b>自動操作：</b>現在の四節リンクが成立する範囲で動きます。
+  </div>
+  <div class="note">
+    固定節は下の横ロッドです。左の縦ロッドが原動節、上の横ロッドが中間節、右の縦ロッドが従動節です。<br>
+    穴番号は各ロッドの端から順に数えます。接続に使っている穴は赤い輪で表示します。
+  </div>
+  <div id="warning" class="warning"></div>
+</section>
+
+<section class="stage">
+  <div class="canvasViewport"><canvas id="canvas"></canvas></div>
+  <div class="status"><span id="angleText">入力角：0.0°</span><span id="stateText">再生停止中</span></div>
+  <div class="legend">
+    <span><i class="sw" style="background:#222"></i>固定節</span>
+    <span><i class="sw" style="background:#e67e22"></i>原動節</span>
+    <span><i class="sw" style="background:#3498db"></i>中間節</span>
+    <span><i class="sw" style="background:#2e8b57"></i>従動節</span>
+    <span><i class="sw" style="background:#f4a261"></i>B点の軌道</span>
+    <span><i class="sw" style="background:#9ecae1"></i>C点の軌道</span>
+  </div>
+</section>
+</div>
+</div>
+
+<script>
+const canvas=document.getElementById("canvas"),ctx=canvas.getContext("2d");
+const warning=document.getElementById("warning"),selectionText=document.getElementById("selectionText");
+const angleText=document.getElementById("angleText"),stateText=document.getElementById("stateText");
+
+// TECH未来仕様：ロッドの穴数を2モードで切り替え
+//  mode "H11V5"：左右（横）11穴、上下（縦）5穴
+//  mode "H5V11"：左右（横）5穴、上下（縦）11穴
+const PITCH=28; // 表示上の穴間隔。実物と同じ「穴数」で操作するための基準値
+
+const ROD_MODES={
+  H11V5:{
+    horizontal:11,
+    vertical:5,
+    label:"左右（横）：11穴　／　上下（縦）：5穴",
+    holes:{
+      ground:[1,11],
+      input:[1,5],
+      coupler:[1,11],
+      output:[1,5]
+    }
+  },
+  H5V11:{
+    horizontal:5,
+    vertical:11,
+    label:"左右（横）：5穴　／　上下（縦）：11穴",
+    holes:{
+      ground:[1,5],
+      input:[1,11],
+      coupler:[1,5],
+      output:[1,11]
+    }
+  }
+};
+
+let rodMode="H11V5";
+let HOLES=ROD_MODES[rodMode];
+let holeEnds=JSON.parse(JSON.stringify(HOLES.holes));
+
+let theta=Math.PI/2,playing=false,dragging=false,lastTime=performance.now();
+let lastGeometry=null,trailB=[],trailC=[],trailVisible=true,trailJustCleared=false;
+let viewZoom=1,playbackSpeed=1,motion={min:0,max:Math.PI*2,direction:1,type:"crank"};
+let assemblySign=1, lastInputAngle=null;
+let selectedJoint=null; // A/B/C/D のいずれか。右クリックで選択
+let selectedLinkForHole=null;
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function linkLength(key){
+  const e=holeEnds[key];
+  return Math.abs(e[1]-e[0])*PITCH;
+}
+function lengths(){return {ground:linkLength("ground"),input:linkLength("input"),coupler:linkLength("coupler"),output:linkLength("output")};}
+function holeCount(key){return (key==="ground"||key==="coupler")?HOLES.horizontal:HOLES.vertical;}
+function jointLinks(j){
+  return {A:["ground","input"],B:["input","coupler"],C:["coupler","output"],D:["output","ground"]}[j];
+}
+function jointHoleEnd(j,key){
+  const map={A:{ground:0,input:0},B:{input:1,coupler:0},C:{coupler:1,output:0},D:{output:1,ground:1}};
+  return map[j][key];
+}
+function resetHoles(){
+  holeEnds=JSON.parse(JSON.stringify(ROD_MODES[rodMode].holes));
+  theta=Math.PI/2;assemblySign=1;lastGeometry=null;trailB=[];trailC=[];
+  selectedJoint=null;selectedLinkForHole=null;updateSelectionText();recalculate();
+}
+
+function geometryAt(t,sign=assemblySign){
+  const L=lengths();
+  const A={x:0,y:0},D={x:L.ground,y:0};
+  const B={x:L.input*Math.cos(t),y:L.input*Math.sin(t)};
+  const vx=D.x-B.x,vy=D.y-B.y,r=Math.hypot(vx,vy),b=L.coupler,c=L.output;
+  if(r<1e-10||r>b+c+1e-9||r<Math.abs(b-c)-1e-9)return null;
+  const alpha=Math.atan2(vy,vx);
+  let cosBeta=(b*b+r*r-c*c)/(2*b*r);cosBeta=clamp(cosBeta,-1,1);
+  const beta=Math.acos(cosBeta),phi=alpha+sign*beta;
+  const C={x:B.x+b*Math.cos(phi),y:B.y+b*Math.sin(phi)};
+  return {A,B,C,D};
+}
+function validAngle(t){return geometryAt(t,1)!==null||geometryAt(t,-1)!==null;}
+function findValidRanges(){
+  const N=1440,ok=[];
+  for(let i=0;i<N;i++)ok.push(validAngle(i/N*Math.PI*2));
+  const ranges=[];let s=null;
+  for(let i=0;i<N;i++){
+    if(ok[i]&&s===null)s=i;
+    if((!ok[i]||i===N-1)&&s!==null){const e=!ok[i]?i-1:i;ranges.push({min:s/N*Math.PI*2,max:e/N*Math.PI*2});s=null;}
+  }
+  if(ranges.length>1&&ranges[0].min===0&&ranges[ranges.length-1].max>(N-2)/N*Math.PI*2){const last=ranges.pop();ranges[0].min=last.min-Math.PI*2;}
+  return ranges;
+}
+function findNearestValid(t){if(validAngle(t))return t;for(let i=1;i<=360;i++){const d=i*Math.PI/180;if(validAngle(t+d))return t+d;if(validAngle(t-d))return t-d;}return t;}
+function classify(){
+  const L=lengths();const arr=[{n:"ground",v:L.ground},{n:"input",v:L.input},{n:"coupler",v:L.coupler},{n:"output",v:L.output}].sort((a,b)=>a.v-b.v);
+  const s=arr[0].v,l=arr[3].v,p=arr[1].v,q=arr[2].v;
+  if(s+l<=p+q+1e-9){if(arr[0].n==="ground")return "両クランク機構";if(arr[0].n==="input")return "てこクランク機構";if(arr[0].n==="output")return "てこクランク機構";}
+  return "両てこ機構";
+}
+function recalculate(){
+  const ranges=findValidRanges();warning.textContent="";
+  if(!ranges.length){warning.textContent="この穴の組み合わせでは四節リンクが成立しません。穴を変更してください。";playing=false;draw();return;}
+  const was=playing;
+  let r=ranges.reduce((a,x)=>(x.max-x.min)>(a.max-a.min)?x:a,ranges[0]);
+  if(ranges.length===1 && r.max-r.min<Math.PI*1.99){motion.type="rocker";motion.min=r.min;motion.max=r.max;theta=clamp(theta,motion.min,motion.max);}else{motion.type="crank";motion.min=0;motion.max=Math.PI*2;}
+  if(!geometryAt(theta,assemblySign))theta=findNearestValid(theta);
+  const g=geometryAt(theta,assemblySign);if(g)lastGeometry=g;
+  playing=was;draw();
+}
+
+function updateSelectionText(){
+  if(!selectedJoint){selectionText.innerHTML="<b>操作：</b>変更したい接続部を右クリックしてください。";return;}
+  const links=jointLinks(selectedJoint);
+  if(!selectedLinkForHole){selectionText.innerHTML=`<b>${selectedJoint}点を選択中：</b>変更したいロッド（${links.join(" / ")}）の穴を左クリックしてください。`;}
+  else selectionText.innerHTML=`<b>${selectedJoint}点・${linkName(selectedLinkForHole)}を選択中：</b>新しい穴を左クリックしてください。`;
+}
+function linkName(k){return {ground:"下の横ロッド",input:"左の縦ロッド",coupler:"上の横ロッド",output:"右の縦ロッド"}[k];}
+
+function resize(){const d=devicePixelRatio||1,r=canvas.getBoundingClientRect();canvas.width=Math.round(r.width*d);canvas.height=Math.round(r.height*d);ctx.setTransform(d,0,0,d,0,0);draw();}
+window.addEventListener("resize",resize);
+function worldToScreen(p,s,ox,oy){return{x:ox+p.x*s,y:oy-p.y*s};}
+function screenToWorld(x,y,s,ox,oy){return{x:(x-ox)/s,y:(oy-y)/s};}
+function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+
+function getView(){
+  const W=canvas.clientWidth,H=canvas.clientHeight,L=lengths();
+  const maxL=Math.max(L.ground,L.input+L.coupler,L.output+L.coupler)+70;
+  const base=Math.min((W-100)/maxL,(H-120)/(maxL*.9));
+  const scale=base*viewZoom,ox=W/2-L.ground*scale/2,oy=H*.63;
+  return {W,H,scale,ox,oy};
+}
+
+function drawAxes(v){
+  const {W,H,scale,ox,oy}=v;ctx.save();ctx.strokeStyle="#e1e5e9";ctx.fillStyle="#7a838c";ctx.lineWidth=1;ctx.font="11px system-ui";
+  ctx.beginPath();ctx.moveTo(0,oy);ctx.lineTo(W,oy);ctx.stroke();ctx.beginPath();ctx.moveTo(ox,0);ctx.lineTo(ox,H);ctx.stroke();
+  ctx.restore();
+}
+
+// 実物のロッドは「接続に使う穴」がロッドの端とは限らない。
+// 例えば11穴ロッドの3番穴と11番穴を接続に使った場合、
+// 3番穴より外側の1・2番穴もそのままロッドとして残る。
+function rodPhysicalPoints(p,q,key){
+  const holes=holeCount(key),ends=holeEnds[key];
+  const e0=ends[0],e1=ends[1];
+  const dx=q.x-p.x,dy=q.y-p.y;
+  const denom=e1-e0;
+  if(denom===0)return null;
+  const ux=dx/denom,uy=dy/denom;
+  const pts=[];
+  for(let i=1;i<=holes;i++){
+    pts.push({x:p.x+(i-e0)*ux,y:p.y+(i-e0)*uy});
+  }
+  return pts;
+}
+
+function drawRod(p,q,key,color,v){
+  const holes=holeCount(key),ends=holeEnds[key];
+  const pts=rodPhysicalPoints(p,q,key);
+  if(!pts)return;
+  const screenPts=pts.map(pt=>worldToScreen(pt,v.scale,v.ox,v.oy));
+  ctx.save();
+
+  // ロッド本体（接続穴の外側まで含めて描画）
+  ctx.lineCap="round";
+  ctx.lineWidth=24;ctx.strokeStyle="#f2f2ee";
+  ctx.beginPath();ctx.moveTo(screenPts[0].x,screenPts[0].y);ctx.lineTo(screenPts[screenPts.length-1].x,screenPts[screenPts.length-1].y);ctx.stroke();
+  ctx.lineWidth=2;ctx.strokeStyle="#bfc4c8";ctx.stroke();
+
+  // 穴
+  for(let i=0;i<holes;i++){
+    const s=screenPts[i];
+    ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(s.x,s.y,9,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle="#c7c7c2";ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle="#777";ctx.font="9px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(i+1,s.x,s.y);
+  }
+
+  // 接続に使っている穴同士を色付きで示す
+  const a=screenPts[ends[0]-1],b=screenPts[ends[1]-1];
+  ctx.lineWidth=10;ctx.strokeStyle=color;ctx.globalAlpha=.78;
+  ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.globalAlpha=1;
+
+  // 接続穴を赤い輪で強調
+  [ends[0],ends[1]].forEach(i=>{
+    const s=screenPts[i-1];
+    ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(s.x,s.y,11,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle="#d84b36";ctx.lineWidth=4;ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function draw(){
+  const v=getView(),W=v.W,H=v.H;ctx.clearRect(0,0,W,H);drawAxes(v);
+  if(lastGeometry){
+    if(trailVisible)drawTrail(trailB,v,"#f4a261");
+    if(trailVisible)drawTrail(trailC,v,"#9ecae1");
+    const g=lastGeometry;
+    drawRod(g.A,g.B,"input","#e67e22",v);drawRod(g.B,g.C,"coupler","#3498db",v);drawRod(g.C,g.D,"output","#2e8b57",v);drawRod(g.A,g.D,"ground","#222",v);
+    drawJoint(g.A,"A",v);drawJoint(g.B,"B",v);drawJoint(g.C,"C",v);drawJoint(g.D,"D",v);
+    angleText.textContent=`入力角：${(((theta*180/Math.PI)%360+360)%360).toFixed(1)}°　｜　${classify()}`;
+  }else{
+    ctx.fillStyle="#b42318";ctx.font="bold 16px system-ui";ctx.textAlign="center";ctx.fillText("この穴の組み合わせでは四節リンクが成立しません",W/2,H/2);ctx.textAlign="left";
+  }
+}
+function drawJoint(p,label,v){
+  const q=worldToScreen(p,v.scale,v.ox,v.oy);ctx.save();
+  if(selectedJoint===label){ctx.fillStyle="#ffd166";ctx.beginPath();ctx.arc(q.x,q.y,18,0,Math.PI*2);ctx.fill();}
+  ctx.fillStyle="#20252b";ctx.beginPath();ctx.arc(q.x,q.y,8,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 10px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(label,q.x,q.y);ctx.restore();
+}
+function drawTrail(points,v,color){if(points.length<2)return;ctx.save();ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.setLineDash([5,4]);ctx.beginPath();let prev=null;for(const p of points){if(!p){prev=null;continue}const q=worldToScreen(p,v.scale,v.ox,v.oy);if(prev&&distance(prev,q)<50)ctx.lineTo(q.x,q.y);else ctx.moveTo(q.x,q.y);prev=q;}ctx.stroke();ctx.restore();}
+
+function addTrail(g){if(!trailVisible)return;if(trailJustCleared){trailB.push({...g.B});trailC.push({...g.C});trailJustCleared=false;return;}if(trailB.length){const ob=trailB[trailB.length-1],oc=trailC[trailC.length-1];const jb=distance(ob,g.B),jc=distance(oc,g.C);if(jb>Math.max(15,lengths().input*.35)||jc>Math.max(15,Math.min(lengths().coupler,lengths().output)*.35)){trailB.push(null);trailC.push(null);}trailB.push({...g.B});trailC.push({...g.C});}else{trailB.push({...g.B});trailC.push({...g.C});}while(trailB.length>6000){trailB.shift();trailC.shift();}}
+function applyCandidate(t,dir=0){const g=geometryAt(t,assemblySign);if(!g)return false;if(lastGeometry){const maxJump=Math.max(20,Math.min(lengths().input,lengths().coupler,lengths().output)*.8);if(distance(lastGeometry.B,g.B)>maxJump||distance(lastGeometry.C,g.C)>maxJump)return false;}theta=t;lastGeometry=g;if(dir)motion.direction=dir;addTrail(g);return true;}
+function moveAutomatic(dt){if(!lastGeometry)return;if(motion.type==="crank"){const c=theta+dt*.9*motion.direction;if(applyCandidate(c,motion.direction))return;motion.direction*=-1;return;}const center=(motion.min+motion.max)/2,amp=(motion.max-motion.min)/2;if(amp<1e-6)return;if(!Number.isFinite(moveAutomatic.t))moveAutomatic.t=Math.acos(clamp((center-theta)/amp,-1,1));const nt=moveAutomatic.t+dt*.65,c=center-amp*Math.cos(nt);if(applyCandidate(c,Math.sign(c-theta)))moveAutomatic.t=nt;}
+function animate(t){const dt=Math.min(.04,(t-lastTime)/1000);lastTime=t;if(playing){moveAutomatic(dt*playbackSpeed*2);draw()}requestAnimationFrame(animate);}
+
+// 穴選択用の幾何学：各ロッドの現在の全穴位置を求める
+function rodHoleScreenPositions(key,g,v){
+  const map={ground:[g.A,g.D],input:[g.A,g.B],coupler:[g.B,g.C],output:[g.C,g.D]};
+  const pts=rodPhysicalPoints(map[key][0],map[key][1],key);
+  return pts?pts.map(p=>worldToScreen(p,v.scale,v.ox,v.oy)):[];
+}
+function nearestHole(x,y){
+  if(!selectedJoint)return null;
+  const g=lastGeometry;if(!g)return null;const v=getView();let best=null;
+  const links=selectedLinkForHole?[selectedLinkForHole]:jointLinks(selectedJoint);
+  for(const key of links){const arr=rodHoleScreenPositions(key,g,v);arr.forEach((p,i)=>{const d=Math.hypot(x-p.x,y-p.y);if(d<22&&(!best||d<best.d))best={key,index:i+1,d};});}
+  return best;
+}
+function setJointHole(joint,key,index){
+  const end=jointHoleEnd(joint,key), other=1-end;const count=holeCount(key);index=clamp(index,1,count);
+  // 選択した接続穴を変更。反対端はそのまま。
+  if(index===holeEnds[key][other]){
+    // 同じ穴を両端には使わない
+    const dir=index<other+1?-1:1;index=clamp(index+dir,1,count);
+  }
+  holeEnds[key][end]=index;selectedLinkForHole=null;selectedJoint=null;assemblySign=1;theta=findNearestValid(theta);trailB=[];trailC=[];recalculate();
+}
+
+canvas.addEventListener("contextmenu",e=>{
+  e.preventDefault();if(!lastGeometry)return;const rect=canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top,v=getView();
+  let best=null;for(const [label,p] of Object.entries(lastGeometry)){const q=worldToScreen(p,v.scale,v.ox,v.oy),d=Math.hypot(x-q.x,y-q.y);if(d<28&&(!best||d<best.d))best={label,d};}
+  if(best){selectedJoint=best.label;selectedLinkForHole=null;updateSelectionText();draw();}
+});
+canvas.addEventListener("pointerdown",e=>{
+  e.preventDefault();if(!lastGeometry)return;const rect=canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;
+  if(selectedJoint && e.button===0){
+    const h=nearestHole(x,y);
+    if(h){setJointHole(selectedJoint,h.key,h.index);return;}
+  }
+  // 通常の手動操作はB点をドラッグ
+  const v=getView(),b=worldToScreen(lastGeometry.B,v.scale,v.ox,v.oy);if(Math.hypot(x-b.x,y-b.y)<28){dragging=true;playing=false;lastInputAngle=theta;canvas.style.cursor="grabbing";stateText.textContent="手動操作";canvas.setPointerCapture(e.pointerId);}
+});
+canvas.addEventListener("pointermove",e=>{if(!dragging)return;const rect=canvas.getBoundingClientRect(),v=getView(),p=screenToWorld(e.clientX-rect.left,e.clientY-rect.top,v.scale,v.ox,v.oy);let desired=Math.atan2(p.y,p.x);if(Number.isFinite(lastInputAngle)){const d=Math.atan2(Math.sin(desired-lastInputAngle),Math.cos(desired-lastInputAngle));desired=lastInputAngle+d;}const dir=Math.sign(desired-theta);if(applyCandidate(desired,dir)){lastInputAngle=desired;draw();}else lastInputAngle=theta;});
+canvas.addEventListener("pointerup",()=>{dragging=false;lastInputAngle=theta;canvas.style.cursor="grab";stateText.textContent=playing?"自動運転中":"手動操作";});
+canvas.addEventListener("pointercancel",()=>{dragging=false;lastInputAngle=theta;canvas.style.cursor="grab";});
+
+function setRodMode(mode){
+  if(!ROD_MODES[mode] || mode===rodMode)return;
+  rodMode=mode;
+  HOLES=ROD_MODES[rodMode];
+  holeEnds=JSON.parse(JSON.stringify(HOLES.holes));
+  theta=Math.PI/2;
+  assemblySign=1;
+  lastGeometry=null;
+  trailB=[];trailC=[];trailJustCleared=true;
+  selectedJoint=null;
+  selectedLinkForHole=null;
+  document.getElementById("rodModeText").innerHTML =
+    `${HOLES.label}<br>穴の位置を変えて、四節リンクの長さを組み替えます。`;
+  document.getElementById("modeHorizontal11").classList.toggle("active",rodMode==="H11V5");
+  document.getElementById("modeHorizontal5").classList.toggle("active",rodMode==="H5V11");
+  updateSelectionText();
+  recalculate();
+}
+
+document.getElementById("modeHorizontal11").onclick=()=>setRodMode("H11V5");
+document.getElementById("modeHorizontal5").onclick=()=>setRodMode("H5V11");
+
+document.getElementById("cancelSelect").onclick=()=>{selectedJoint=null;selectedLinkForHole=null;updateSelectionText();draw();};
+document.getElementById("resetHoles").onclick=resetHoles;
+document.getElementById("play").onclick=()=>{if(!lastGeometry){theta=findNearestValid(theta);lastGeometry=geometryAt(theta,assemblySign);}if(!lastGeometry)return;playing=true;stateText.textContent="自動運転中";};
+document.getElementById("stop").onclick=()=>{playing=false;stateText.textContent="再生停止中";};
+document.getElementById("clear").onclick=()=>{trailB=[];trailC=[];trailJustCleared=true;draw();};
+document.getElementById("trailToggle").onclick=()=>{trailVisible=!trailVisible;document.getElementById("trailToggle").textContent=trailVisible?"軌道：ON":"軌道：OFF";document.getElementById("trailToggle").classList.toggle("active",trailVisible);draw();};
+function setZoom(z){viewZoom=clamp(z,.5,3);draw();}document.getElementById("zoomIn").onclick=()=>setZoom(viewZoom*1.2);document.getElementById("zoomOut").onclick=()=>setZoom(viewZoom/1.2);document.getElementById("zoomReset").onclick=()=>setZoom(1);
+canvas.addEventListener("wheel",e=>{e.preventDefault();setZoom(viewZoom*(e.deltaY<0?1.12:1/1.12));},{passive:false});
+function setPlaybackSpeed(v){v=Number(v);if(!Number.isFinite(v))v=1;v=clamp(v,.25,2.5);playbackSpeed=v;document.getElementById("speedRange").value=v;document.getElementById("speedNumber").value=v;document.getElementById("speedValue").textContent=v.toFixed(2);}document.getElementById("speedRange").oninput=e=>setPlaybackSpeed(e.target.value);document.getElementById("speedNumber").onchange=e=>setPlaybackSpeed(e.target.value);
+
+// 初期化
+recalculate();resize();requestAnimationFrame(animate);
+</script>
+</body>
+</html>
