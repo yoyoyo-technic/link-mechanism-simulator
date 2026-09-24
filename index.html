@@ -185,8 +185,8 @@ function findNearestValid(t){if(validAngle(t))return t;for(let i=1;i<=360;i++){c
 function classify(){
   const L=lengths();const arr=[{n:"ground",v:L.ground},{n:"input",v:L.input},{n:"coupler",v:L.coupler},{n:"output",v:L.output}].sort((a,b)=>a.v-b.v);
   const s=arr[0].v,l=arr[3].v,p=arr[1].v,q=arr[2].v;
-  if(s+l<=p+q+1e-9){if(arr[0].n==="ground")return "両クランク機構";if(arr[0].n==="input")return "てこクランク機構";if(arr[0].n==="output")return "てこクランク機構";}
-  return "両てこ機構";
+  if(s+l<=p+q+1e-9){if(arr[0].n==="ground")return "";if(arr[0].n==="input")return "";if(arr[0].n==="output")return "てこクランク機構";}
+  return "";
 }
 function recalculate(){
   const ranges=findValidRanges();warning.textContent="";
